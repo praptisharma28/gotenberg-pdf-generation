@@ -1,0 +1,11 @@
+Region,Sales Rep,Customer ID,Order Date,Product Category,Product Name,Quantity,Unit Price,Total Sales,Payment Method,Shipping Status,Expected Delivery,Customer Rating
+North,Alice Smith,CS1001,2024-01-15,Electronics,4K Gaming Monitor,2,499.99,999.98,Credit Card,Shipped,2024-01-20,4.5
+South,Bob Jones,CS1002,2024-01-15,Accessories,Wireless Gaming Mouse,5,79.99,399.95,PayPal,Processing,2024-01-22,N/A
+East,Carol Wilson,CS1003,2024-01-16,Components,Mechanical Keyboard,3,129.99,389.97,Debit Card,Delivered,2024-01-18,5.0
+West,David Brown,CS1004,2024-01-16,Storage,2TB SSD Drive,4,199.99,799.96,Credit Card,Processing,2024-01-23,N/A
+North,Alice Smith,CS1005,2024-01-17,Networking,WiFi 6 Router,1,299.99,299.99,Bank Transfer,Pending,2024-01-25,N/A
+South,Bob Jones,CS1006,2024-01-17,Software,Antivirus Premium,10,49.99,499.90,PayPal,Delivered,2024-01-19,4.8
+East,Carol Wilson,CS1007,2024-01-18,Electronics,27" IPS Monitor,2,349.99,699.98,Credit Card,Shipped,2024-01-24,4.2
+West,David Brown,CS1008,2024-01-18,Components,32GB RAM Kit,3,159.99,479.97,Debit Card,Processing,2024-01-26,N/A
+North,Alice Smith,CS1009,2024-01-19,Accessories,Gaming Headset,5,89.99,449.95,PayPal,Delivered,2024-01-21,4.7
+South,Bob Jones,CS1010,2024-01-19,Storage,External HDD 5TB,2,229.99,459.98,Credit Card,Shipped,2024-01-25,4.0
