@@ -17,7 +17,6 @@ Clone this repository to your local machine:
 
 ```bash
 git clone https://github.com/praptisharma28/gotenberg-pdf-generation.git
-)
 cd gotenberg-pdf-generation
 ```
 
