@@ -45,7 +45,7 @@ Activate the virtual environment:
 Start the FastAPI application using `uvicorn`:
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 - Replace `app.main:app` with the correct module and app name if your structure is different.
