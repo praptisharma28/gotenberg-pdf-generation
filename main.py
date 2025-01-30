@@ -331,6 +331,43 @@ async def convert_html_to_pdf():
         logger.error(f"Error converting HTML to PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/merge-pdfs", response_class=FileResponse)
+async def merge_pdfs(files: List[UploadFile] = File(...)):
+    """Merge multiple PDFs into a single PDF using Gotenberg"""
+    try:
+        if len(files) < 2:
+            raise HTTPException(status_code=400, detail="At least two PDF files are required for merging")
+
+        # Prepare files for the Gotenberg request
+        gotenberg_files = {}
+        for i, file in enumerate(files):
+            file_content = await file.read()
+            gotenberg_files[f"file_{i + 1}.pdf"] = (f"file_{i + 1}.pdf", file_content, "application/pdf")
+
+        # Generate a unique filename for the merged PDF
+        merged_pdf_path = TEMP_DIR / f"merged_{os.urandom(8).hex()}.pdf"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{GOTENBERG_URL}/forms/pdfengines/merge",
+                files=gotenberg_files
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="PDF merging failed")
+
+            # Save the merged PDF to the temporary directory
+            merged_pdf_path.write_bytes(response.content)
+
+            return FileResponse(
+                path=merged_pdf_path,
+                filename="merged.pdf",
+                media_type="application/pdf"
+            )
+    except Exception as e:
+        logger.error(f"Error merging PDFs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
