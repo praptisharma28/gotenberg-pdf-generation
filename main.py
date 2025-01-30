@@ -331,41 +331,158 @@ async def convert_html_to_pdf():
         logger.error(f"Error converting HTML to PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/merge-pdfs", response_class=FileResponse)
-async def merge_pdfs(files: List[UploadFile] = File(...)):
-    """Merge multiple PDFs into a single PDF using Gotenberg"""
+@app.post("/convert/image", response_class=FileResponse)
+async def convert_image_to_pdf(file: UploadFile = File(...)):
+    """Convert an image (JPEG, PNG, etc.) to PDF using Gotenberg"""
     try:
-        if len(files) < 2:
-            raise HTTPException(status_code=400, detail="At least two PDF files are required for merging")
+        # Check if the file is an image
+        if file.content_type not in ["image/jpeg", "image/png"]:
+            raise HTTPException(status_code=400, detail="Only JPEG and PNG images are supported")
 
-        # Prepare files for the Gotenberg request
-        gotenberg_files = {}
-        for i, file in enumerate(files):
-            file_content = await file.read()
-            gotenberg_files[f"file_{i + 1}.pdf"] = (f"file_{i + 1}.pdf", file_content, "application/pdf")
+        # Read the image file content
+        file_content = await file.read()
 
-        # Generate a unique filename for the merged PDF
-        merged_pdf_path = TEMP_DIR / f"merged_{os.urandom(8).hex()}.pdf"
+        # Create HTML wrapper for the image
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ margin: 0; padding: 0; }}
+                img {{ max-width: 100%; height: auto; }}
+            </style>
+        </head>
+        <body>
+            <img src="{file.filename}" alt="Converted image">
+        </body>
+        </html>
+        """
 
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # Send the HTML and image to Gotenberg
+            files = {
+                'index.html': ('index.html', html_content.encode(), 'text/html'),
+                file.filename: (file.filename, file_content, file.content_type)
+            }
+            
             response = await client.post(
-                f"{GOTENBERG_URL}/forms/pdfengines/merge",
-                files=gotenberg_files
+                f"{GOTENBERG_URL}/forms/chromium/convert/html",
+                files=files
             )
 
             if response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to convert image to PDF")
+
+            # Save the converted PDF to a temporary file
+            pdf_path = TEMP_DIR / f"converted_{os.urandom(8).hex()}.pdf"
+            pdf_path.write_bytes(response.content)
+
+            return FileResponse(
+                path=pdf_path,
+                filename=f"{file.filename}.pdf",
+                media_type="application/pdf"
+            )
+
+    except Exception as e:
+        logger.error(f"Error converting image to PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/merge-pdfs", response_class=FileResponse)
+async def merge_pdfs(files: List[UploadFile] = File(...)):
+    """Merge multiple PDFs and images into a single PDF using Gotenberg"""
+    try:
+        if len(files) < 2:
+            raise HTTPException(status_code=400, detail="At least two files are required for merging")
+
+        # Temporary list to store paths of PDFs (original or converted from images)
+        pdf_paths = []
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for file in files:
+                file_content = await file.read()
+
+                # Check if the file is an image (JPEG, PNG, etc.)
+                if file.content_type in ["image/jpeg", "image/png"]:
+                    # Convert image to PDF using HTML wrapper method
+                    html_content = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>
+                            body {{ margin: 0; padding: 0; }}
+                            img {{ max-width: 100%; height: auto; }}
+                        </style>
+                    </head>
+                    <body>
+                        <img src="{file.filename}" alt="Converted image">
+                    </body>
+                    </html>
+                    """
+
+                    # Send the HTML and image to Gotenberg
+                    files_data = {
+                        'index.html': ('index.html', html_content.encode(), 'text/html'),
+                        file.filename: (file.filename, file_content, file.content_type)
+                    }
+                    
+                    response = await client.post(
+                        f"{GOTENBERG_URL}/forms/chromium/convert/html",
+                        files=files_data
+                    )
+
+                    if response.status_code != 200:
+                        raise HTTPException(status_code=500, detail=f"Failed to convert image {file.filename} to PDF")
+
+                    # Save the converted PDF to a temporary file
+                    pdf_path = TEMP_DIR / f"converted_{os.urandom(4).hex()}.pdf"
+                    pdf_path.write_bytes(response.content)
+                    pdf_paths.append(pdf_path)
+
+                elif file.content_type == "application/pdf":
+                    # If the file is already a PDF, save it directly
+                    pdf_path = TEMP_DIR / f"original_{os.urandom(4).hex()}.pdf"
+                    pdf_path.write_bytes(file_content)
+                    pdf_paths.append(pdf_path)
+
+                else:
+                    raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+
+            # Prepare files for the Gotenberg merge request
+            merge_files = {}
+            for i, pdf_path in enumerate(pdf_paths):
+                merge_files[f"file_{i + 1}.pdf"] = (f"file_{i + 1}.pdf", pdf_path.read_bytes(), "application/pdf")
+
+            # Merge PDFs using Gotenberg's merge endpoint
+            merge_response = await client.post(
+                f"{GOTENBERG_URL}/forms/pdfengines/merge",
+                files=merge_files
+            )
+
+            if merge_response.status_code != 200:
                 raise HTTPException(status_code=500, detail="PDF merging failed")
 
-            # Save the merged PDF to the temporary directory
-            merged_pdf_path.write_bytes(response.content)
+            # Save the merged PDF
+            merged_pdf_path = TEMP_DIR / f"merged_{os.urandom(8).hex()}.pdf"
+            merged_pdf_path.write_bytes(merge_response.content)
+
+            # Clean up temporary PDF files
+            for pdf_path in pdf_paths:
+                pdf_path.unlink()
 
             return FileResponse(
                 path=merged_pdf_path,
                 filename="merged.pdf",
                 media_type="application/pdf"
             )
+
     except Exception as e:
         logger.error(f"Error merging PDFs: {str(e)}")
+        # Clean up any temporary files in case of error
+        for pdf_path in pdf_paths:
+            try:
+                pdf_path.unlink()
+            except:
+                pass
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
